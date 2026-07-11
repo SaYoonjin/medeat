@@ -37,7 +37,7 @@ public class MedicationMapper {
         dto.setUserId(entity.getUser().getUserId());
         dto.setTakenIndex(entity.getTakenIndex() == null ? 0 : entity.getTakenIndex());
         dto.setTakenAt(entity.getTakenAt());
-        dto.setTakenDate(entity.getTakenAt() == null ? null : entity.getTakenAt().toLocalDate().toString());
+        dto.setTakenDate(entity.getTakenDate() == null ? null : entity.getTakenDate().toString());
         return dto;
     }
 

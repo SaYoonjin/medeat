@@ -21,7 +21,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -121,6 +120,12 @@ public class MedicationServiceImpl implements MedicationService {
     @Override
     @Transactional
     public void saveLog(Long userId, Long medicationId, int takenIndex) {
+        LocalDate today = LocalDate.now();
+        if (medicationLogRepository.existsByMedicationMedicationIdAndTakenDateAndTakenIndex(
+                medicationId, today, takenIndex)) {
+            return;
+        }
+
         Medication medication = medicationRepository.findById(medicationId)
                 .orElseThrow(() -> new IllegalArgumentException("복약 정보를 찾을 수 없습니다."));
 
@@ -128,6 +133,7 @@ public class MedicationServiceImpl implements MedicationService {
         logEntity.setUser(getRequiredUser(userId));
         logEntity.setMedication(medication);
         logEntity.setTakenIndex(takenIndex);
+        logEntity.setTakenDate(today);
         medicationLogRepository.save(logEntity);
     }
 
@@ -173,9 +179,11 @@ public class MedicationServiceImpl implements MedicationService {
 
     @Override
     public List<MedicationLogDto> getLogs(Long userId, String startDate, String endDate) {
-        LocalDateTime start = LocalDate.parse(startDate).atStartOfDay();
-        LocalDateTime endExclusive = LocalDate.parse(endDate).plusDays(1).atStartOfDay();
-        return medicationQueryRepository.findLogsByPeriod(userId, start, endExclusive);
+        return medicationQueryRepository.findLogsByPeriod(
+                userId,
+                LocalDate.parse(startDate),
+                LocalDate.parse(endDate)
+        );
     }
 
     private User getRequiredUser(Long userId) {

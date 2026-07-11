@@ -10,7 +10,6 @@ import com.querydsl.jpa.impl.JPAQueryFactory;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
@@ -24,7 +23,7 @@ public class MedicationQueryRepository {
 
     public List<MedicationLogDto> findTodayLogs(Long userId) {
         LocalDate today = LocalDate.now();
-        return findLogsByPeriod(userId, today.atStartOfDay(), today.plusDays(1).atStartOfDay());
+        return findLogsByPeriod(userId, today, today);
     }
 
     public List<MedicationLogDto> findTodayLogsByMedication(Long medicationId) {
@@ -38,20 +37,19 @@ public class MedicationQueryRepository {
                         medicationLog.medication().medicationId.as("medicationId"),
                         medicationLog.user().userId.as("userId"),
                         medicationLog.takenIndex.as("takenIndex"),
-                        Expressions.stringTemplate("date_format({0}, {1})", medicationLog.takenAt, "%Y-%m-%d").as("takenDate"),
+                        Expressions.stringTemplate("date_format({0}, {1})", medicationLog.takenDate, "%Y-%m-%d").as("takenDate"),
                         medicationLog.takenAt.as("takenAt")
                 ))
                 .from(medicationLog)
                 .where(
                         medicationLog.medication().medicationId.eq(medicationId),
-                        medicationLog.takenAt.goe(today.atStartOfDay()),
-                        medicationLog.takenAt.lt(today.plusDays(1).atStartOfDay())
+                        medicationLog.takenDate.eq(today)
                 )
                 .orderBy(medicationLog.takenIndex.asc())
                 .fetch();
     }
 
-    public List<MedicationLogDto> findLogsByPeriod(Long userId, LocalDateTime start, LocalDateTime endExclusive) {
+    public List<MedicationLogDto> findLogsByPeriod(Long userId, LocalDate startDate, LocalDate endDate) {
         QMedicationLog medicationLog = QMedicationLog.medicationLog;
 
         return queryFactory
@@ -61,14 +59,13 @@ public class MedicationQueryRepository {
                         medicationLog.medication().medicationId.as("medicationId"),
                         medicationLog.user().userId.as("userId"),
                         medicationLog.takenIndex.as("takenIndex"),
-                        Expressions.stringTemplate("date_format({0}, {1})", medicationLog.takenAt, "%Y-%m-%d").as("takenDate"),
+                        Expressions.stringTemplate("date_format({0}, {1})", medicationLog.takenDate, "%Y-%m-%d").as("takenDate"),
                         medicationLog.takenAt.as("takenAt")
                 ))
                 .from(medicationLog)
                 .where(
                         medicationLog.user().userId.eq(userId),
-                        medicationLog.takenAt.goe(start),
-                        medicationLog.takenAt.lt(endExclusive)
+                        medicationLog.takenDate.between(startDate, endDate)
                 )
                 .orderBy(medicationLog.takenAt.asc())
                 .fetch();

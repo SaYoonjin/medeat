@@ -21,6 +21,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -110,6 +111,19 @@ class MedicationServiceImplTest {
         assertThat(saved.getUser()).isSameAs(user);
         assertThat(saved.getMedication()).isSameAs(medication);
         assertThat(saved.getTakenIndex()).isEqualTo(2);
+        assertThat(saved.getTakenDate()).isEqualTo(LocalDate.now());
+    }
+
+    @Test
+    void saveLog_skipsWhenSameDoseAlreadyExistsToday() {
+        when(medicationLogRepository.existsByMedicationMedicationIdAndTakenDateAndTakenIndex(
+                eq(10L), any(LocalDate.class), eq(2))).thenReturn(true);
+
+        medicationService.saveLog(1L, 10L, 2);
+
+        verify(medicationRepository, never()).findById(any());
+        verify(userRepository, never()).findById(any());
+        verify(medicationLogRepository, never()).save(any());
     }
 
     @Test

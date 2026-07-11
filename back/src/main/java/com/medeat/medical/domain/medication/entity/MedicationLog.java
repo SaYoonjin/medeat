@@ -3,10 +3,17 @@ package com.medeat.medical.domain.medication.entity;
 import com.medeat.auth.domain.user.entity.User;
 import jakarta.persistence.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "medication_log")
+@Table(
+        name = "medication_log",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_medication_log_med_date_index",
+                columnNames = {"medication_id", "taken_date", "taken_index"}
+        )
+)
 public class MedicationLog {
 
     @Id
@@ -25,8 +32,18 @@ public class MedicationLog {
     @Column(name = "taken_index")
     private Integer takenIndex;
 
+    @Column(name = "taken_date", nullable = false)
+    private LocalDate takenDate;
+
     @Column(name = "taken_at", insertable = false, updatable = false)
     private LocalDateTime takenAt;
+
+    @PrePersist
+    void prePersist() {
+        if (takenDate == null) {
+            takenDate = LocalDate.now();
+        }
+    }
 
     public Long getLogId() {
         return logId;
@@ -58,6 +75,14 @@ public class MedicationLog {
 
     public void setTakenIndex(Integer takenIndex) {
         this.takenIndex = takenIndex;
+    }
+
+    public LocalDate getTakenDate() {
+        return takenDate;
+    }
+
+    public void setTakenDate(LocalDate takenDate) {
+        this.takenDate = takenDate;
     }
 
     public LocalDateTime getTakenAt() {

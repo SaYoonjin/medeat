@@ -85,10 +85,11 @@
             medication_id AS medicationId,
             user_id       AS userId,
             taken_index   AS takenIndex,
+            taken_date    AS takenDate,
             taken_at      AS takenAt
         FROM medication_log
         WHERE user_id = #{userId}
-          AND DATE(taken_at) = CURDATE()
+          AND taken_date = CURDATE()
         ORDER BY taken_at ASC
     </select>
 
@@ -98,11 +99,13 @@
         INSERT INTO medication_log (
             user_id,
             medication_id,
+            taken_date,
             taken_index
         )
         VALUES (
             #{userId},
             #{medicationId},
+            CURDATE(),
             #{takenIndex}
         )
     </insert>
@@ -157,10 +160,11 @@
             medication_id AS medicationId,
             user_id       AS userId,
             taken_index   AS takenIndex,
+            taken_date    AS takenDate,
             taken_at      AS takenAt
         FROM medication_log
         WHERE medication_id = #{medicationId}
-          AND DATE(taken_at) = CURDATE()
+          AND taken_date = CURDATE()
         ORDER BY taken_index ASC
     </select>
 
@@ -209,10 +213,11 @@
 	        medication_id AS medicationId,
 	        user_id       AS userId,
 	        taken_index   AS takenIndex,
+	        taken_date    AS takenDate,
 	        taken_at      AS takenAt
 	    FROM medication_log
 	    WHERE user_id = #{userId}
-	      AND DATE(taken_at) BETWEEN #{startDate} AND #{endDate}
+	      AND taken_date BETWEEN #{startDate} AND #{endDate}
 	    ORDER BY taken_at ASC
 	</select>
 	

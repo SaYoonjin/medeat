@@ -23,7 +23,11 @@ public interface MedicationDao {
     List<MedicationLogDto> getTodayLogs(Long userId);
 
     // 복용 기록 저장
-    void insertLog(Long userId, Long medicationId, int takenIndex);
+    void insertLog(
+        @Param("userId") Long userId,
+        @Param("medicationId") Long medicationId,
+        @Param("takenIndex") int takenIndex
+    );
     
     // 전체 약 목록 (알림 스케줄러용)
     List<MedicationDto> selectAll();

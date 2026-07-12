@@ -1,5 +1,7 @@
 package com.medeat.chatbot.service;
 
+import com.medeat.chatbot.dto.ChatResponse;
+
 public interface ChatbotService {
-    String ask(String userMessage);
+    ChatResponse ask(Long userId, String userMessage);
 }

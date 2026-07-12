@@ -2,11 +2,13 @@ package com.medeat.medical.service.impl;
 
 import com.medeat.medical.dao.DrugInfoDao;
 import com.medeat.medical.dto.DrugInfoDto;
+import com.medeat.medical.dto.DrugInfoSection;
 import com.medeat.medical.service.DrugInfoService;
 import com.medeat.util.PillNameCsvLoader;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import org.jsoup.Jsoup;
@@ -19,6 +21,7 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -31,6 +34,9 @@ public class DrugInfoServiceImpl implements DrugInfoService {
 
     private final DrugInfoDao drugInfoDao;
     private final PillNameCsvLoader pillNameCsvLoader;
+
+    @Value("${mfds.drug.cache-ttl-days:30}")
+    private long cacheTtlDays;
 
     public DrugInfoServiceImpl(DrugInfoDao drugInfoDao, PillNameCsvLoader pillNameCsvLoader) {
         this.drugInfoDao = drugInfoDao;
@@ -305,6 +311,87 @@ public class DrugInfoServiceImpl implements DrugInfoService {
        4) 핵심 getDrugInfo + nedrug fallback
     ========================================================= */
     @Override
+    public DrugInfoDto getDrugInfoCached(
+            Long itemSeq,
+            String nameHint,
+            Set<DrugInfoSection> requiredSections
+    ) throws Exception {
+        if (itemSeq == null) {
+            return null;
+        }
+
+        DrugInfoDto cached = drugInfoDao.selectByItemSeq(itemSeq);
+        if (isFresh(cached) && containsRequiredSections(cached, requiredSections)) {
+            return cached;
+        }
+
+        DrugInfoDto target = cached;
+        if (target == null) {
+            target = new DrugInfoDto();
+            target.setItemSeq(itemSeq);
+            target.setItemName(nameHint);
+        }
+
+        DrugInfoDto fresh = fetchFreshDrugInfo(
+                itemSeq,
+                valueOrDefault(target.getItemName(), nameHint),
+                requiredSections
+        );
+        if (fresh == null) {
+            return target;
+        }
+
+        target = merge(target, fresh);
+        boolean updated = overwriteAvailableSections(target, fresh);
+        if (updated) {
+            drugInfoDao.upsertDrugInfo(target);
+            target.setUpdatedAt(LocalDateTime.now());
+        }
+        return target;
+    }
+
+    DrugInfoDto fetchFreshDrugInfo(
+            Long itemSeq,
+            String nameHint,
+            Set<DrugInfoSection> requiredSections
+    ) {
+        DrugInfoDto fresh = fetchEasyDrugByName(nameHint);
+        if (!containsRequiredSections(fresh, requiredSections)) {
+            fresh = merge(fresh, scrapeNedrugByItemSeq(itemSeq));
+        }
+        if (fresh != null && fresh.getItemSeq() == null) {
+            fresh.setItemSeq(itemSeq);
+        }
+        return fresh;
+    }
+
+    private boolean overwriteAvailableSections(DrugInfoDto target, DrugInfoDto fresh) {
+        boolean updated = false;
+
+        for (DrugInfoSection section : EnumSet.allOf(DrugInfoSection.class)) {
+            String value = section.getValue(fresh);
+            if (isBlank(value)) {
+                continue;
+            }
+            switch (section) {
+                case EFFICACY -> target.setEfcyQesitm(value);
+                case USAGE -> target.setUseMethodQesitm(value);
+                case WARNING -> target.setAtpnWarnQesitm(value);
+                case PRECAUTION -> target.setAtpnQesitm(value);
+                case INTERACTION -> target.setIntrcQesitm(value);
+                case SIDE_EFFECT -> target.setSeQesitm(value);
+                case STORAGE -> target.setDepositMethodQesitm(value);
+            }
+            updated = true;
+        }
+        return updated;
+    }
+
+    private String valueOrDefault(String value, String defaultValue) {
+        return isBlank(value) ? defaultValue : value;
+    }
+
+    @Override
     public DrugInfoDto getDrugInfo(Long itemSeq, String nameHint) throws Exception {
 
         Long seq = itemSeq;
@@ -367,9 +454,30 @@ public class DrugInfoServiceImpl implements DrugInfoService {
 
         if (seq != null) {
             drugInfoDao.upsertDrugInfo(merged);
+            merged.setUpdatedAt(LocalDateTime.now());
         }
 
         return merged;
+    }
+
+    private boolean isFresh(DrugInfoDto drug) {
+        return drug != null
+                && drug.getUpdatedAt() != null
+                && !drug.getUpdatedAt().isBefore(LocalDateTime.now().minusDays(cacheTtlDays));
+    }
+
+    private boolean containsRequiredSections(
+            DrugInfoDto drug,
+            Set<DrugInfoSection> requiredSections
+    ) {
+        if (drug == null) {
+            return false;
+        }
+        if (requiredSections == null || requiredSections.isEmpty()) {
+            return hasText(drug);
+        }
+        return requiredSections.stream()
+                .allMatch(section -> !isBlank(section.getValue(drug)));
     }
 
     /* =========================================================

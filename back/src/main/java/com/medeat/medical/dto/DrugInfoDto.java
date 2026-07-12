@@ -1,5 +1,7 @@
 package com.medeat.medical.dto;
 
+import java.time.LocalDateTime;
+
 public class DrugInfoDto {
 
     private Long itemSeq;
@@ -31,6 +33,7 @@ public class DrugInfoDto {
     private String lengLong;
     private String lengShort;
     private String thick;
+    private LocalDateTime updatedAt;
 
     // ===== Getter / Setter =====
     public Long getItemSeq() { return itemSeq; }
@@ -98,4 +101,7 @@ public class DrugInfoDto {
 
     public String getThick() { return thick; }
     public void setThick(String thick) { this.thick = thick; }
+
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
 }

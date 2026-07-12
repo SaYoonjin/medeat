@@ -24,7 +24,8 @@
             deposit_method_qesitm AS depositMethodQesitm,
             drug_shape AS drugShape,
             color_class1 AS colorClass1,
-            print_front AS printFront
+            print_front AS printFront,
+            updated_at AS updatedAt
         FROM drug_info
         WHERE item_seq = #{itemSeq}
     </select>
@@ -41,9 +42,14 @@
 	        efcy_qesitm AS efcyQesitm,
 	        use_method_qesitm AS useMethodQesitm,
 	        atpn_warn_qesitm AS atpnWarnQesitm,
+	        atpn_qesitm AS atpnQesitm,
+	        intrc_qesitm AS intrcQesitm,
+	        se_qesitm AS seQesitm,
+	        deposit_method_qesitm AS depositMethodQesitm,
 	        drug_shape AS drugShape,
 	        color_class1 AS colorClass1,
-	        print_front AS printFront
+	        print_front AS printFront,
+	        updated_at AS updatedAt
 	    FROM drug_info
 	    WHERE item_seq IN
 	    <foreach collection="itemSeqList"
@@ -84,7 +90,8 @@
 	        deposit_method_qesitm = VALUES(deposit_method_qesitm),
 	        drug_shape = VALUES(drug_shape),
 	        color_class1 = VALUES(color_class1),
-	        print_front = VALUES(print_front);
+	        print_front = VALUES(print_front),
+	        updated_at = CURRENT_TIMESTAMP;
 	</insert>
 
 

@@ -3,6 +3,9 @@ package com.medeat.chatbot.controller;
 import com.medeat.chatbot.dto.ChatRequest;
 import com.medeat.chatbot.dto.ChatResponse;
 import com.medeat.chatbot.service.ChatbotService;
+import com.medeat.common.web.SessionUserSupport;
+import jakarta.servlet.http.HttpSession;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -10,13 +13,16 @@ import org.springframework.web.bind.annotation.*;
 public class ChatbotController {
 
     private final ChatbotService chatbotService;
+    private final SessionUserSupport sessionUserSupport;
 
-    public ChatbotController(ChatbotService chatbotService) {
+    public ChatbotController(ChatbotService chatbotService, SessionUserSupport sessionUserSupport) {
         this.chatbotService = chatbotService;
+        this.sessionUserSupport = sessionUserSupport;
     }
 
     @PostMapping
-    public ChatResponse chat(@RequestBody ChatRequest req) {
-        return new ChatResponse(chatbotService.ask(req.getMessage()));
+    public ChatResponse chat(@Valid @RequestBody ChatRequest req, HttpSession session) {
+        Long userId = sessionUserSupport.getRequiredUser(session).getUserId();
+        return chatbotService.ask(userId, req.getMessage().trim());
     }
 }

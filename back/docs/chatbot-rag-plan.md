@@ -889,17 +889,138 @@ commit 7: add retrieval quality and performance evaluation
 
 > GPT 기반 복약 챗봇을 개인 복약 데이터와 공공 의약품 데이터를 결합한 근거 기반 검색·응답 시스템으로 고도화했습니다. 등록 약과 복용 여부처럼 정확성이 필요한 데이터는 RDB에서 조회하고, 긴 부작용·주의사항 문서는 Section과 Chunk 단위로 가공해 Vector DB에서 의미 기반으로 검색했습니다. 식약처 데이터의 Section별 내용 Hash를 비교해 변경되지 않은 Section은 건너뛰고, 변경된 Section만 새 버전으로 인덱싱했습니다. 문서 유효 상태와 인덱싱 작업 상태를 분리하고, 모든 Chunk가 저장된 이후에만 새 버전을 검색 대상으로 전환했습니다. 인덱싱 작업에는 Claim Token 기반 선점, 실패 재시도, 오래된 PROCESSING 작업 복구를 적용했으며, Recall@K와 평균·P95 응답시간으로 검색 품질과 성능을 검증했습니다.
 
-## 22. 현재 단계의 결론
+## 22. 진행 기록
 
-현재는 설계를 더 늘리기보다 1차 목표인 RDB 기반 Grounded Chatbot을 먼저 완성해야 한다.
+### 22.1 RDB/API 기반 구조화 RAG 완료
+
+커밋:
+
+```text
+def5131 feat: add grounded medication chatbot rag
+```
+
+완료 내용:
+
+```text
+사용자 등록 약 조회
+오늘 복용 기록 조회
+개인 복약 질문 / 일반 의약품 질문 분리
+질문 의도별 식약처 section 선택
+drug_info DB 우선 조회
+필요 시 식약처 API fallback
+근거 context 생성
+출처와 조회 시점 응답
+근거 부족 시 답변 제한
+```
+
+현재 이 단계는 Vector DB 기반 RAG가 아니라, RDB와 공공 API를 이용한 구조화 RAG 또는 RDB 기반 Grounded Chatbot으로 본다.
+
+### 22.2 RAG 문서·Chunk·Index Job 모델 완료
+
+커밋:
+
+```text
+1a4f128 feat: add drug rag indexing model
+```
+
+완료 내용:
+
+```text
+rag_document 테이블 추가
+rag_chunk 테이블 추가
+rag_index_job 테이블 추가
+문서 lifecycleStatus 분리
+작업 jobStatus 분리
+DrugInfoDto를 Section 단위 문서로 변환
+Section 전체 contentHash 계산
+기존 ACTIVE 문서와 hash가 같으면 SKIP
+변경된 Section은 새 documentVersion으로 INDEXING 문서 생성
+Chunk 분리
+각 Chunk에 대한 PENDING index job 생성
+```
+
+이 단계에서는 아직 Qdrant에 Vector를 저장하지 않는다. Qdrant 저장 전, 검색 가능한 문서·Chunk·작업 상태를 MySQL에 준비하는 단계다.
+
+### 22.3 현재 진행 단계: Spring AI VectorStore + Qdrant 기본 연결
+
+이번 단계의 목표:
+
+```text
+Spring AI Qdrant VectorStore 의존성 추가
+Qdrant 연결 설정 추가
+RagVectorStoreService 구현
+rag_chunk를 Spring AI Document로 변환
+VectorStore.add()로 Qdrant 저장
+SearchRequest + metadata filter로 유사도 검색
+documentVersion 기준 filter 삭제
+```
+
+이번 단계에서 지키는 원칙:
+
+```text
+저장 책임은 Spring AI VectorStore 하나로 둔다.
+Native QdrantClient는 아직 저장 경로로 사용하지 않는다.
+EmbeddingModel은 VectorStore 내부에서 사용하도록 둔다.
+MySQL은 ACTIVE documentVersion과 논리 상태의 기준이다.
+Qdrant는 Vector와 payload 검색 저장소로만 사용한다.
+```
+
+이번 단계에서 아직 하지 않는 것:
+
+```text
+Claim Token 기반 작업 선점
+Retry / stale PROCESSING 복구
+Payload Index 생성
+새 버전 전체 완료 후 ACTIVE 전환
+이전 버전 OBSOLETE 처리 자동화
+검색 품질 평가셋 측정
+```
+
+### 22.4 Spring AI VectorStore + Qdrant 기본 연결 완료
+
+완료 내용:
+
+```text
+Spring AI BOM 1.1.8 추가
+spring-ai-starter-vector-store-qdrant 의존성 추가
+Qdrant 연결 설정 외부화
+RagVectorStoreService 추가
+PENDING rag_index_job 대상 Chunk 조회
+rag_chunk를 Spring AI Document로 변환
+itemSeq, sectionType, documentVersion, ragDocumentId, ragChunkId 등 metadata 구성
+VectorStore.add()를 통한 저장 경로 구현
+저장 성공 후 rag_chunk.vector_id 반영
+저장 성공 후 rag_index_job COMPLETED 처리
+SearchRequest 기반 similaritySearch 구현
+itemSeq + sectionType + documentVersion metadata filter 적용
+documentVersion 기준 VectorStore 삭제 경로 구현
+VectorStore 저장·검색·삭제 단위 테스트 추가
+```
+
+Spring AI 버전은 현재 프로젝트의 Spring Boot 3.5.x 계열과의 호환성을 고려해 1.1.x 계열로 적용했다. Spring AI 2.x 문서는 Spring Boot 4.x 이상을 기준으로 하므로, 지금 프로젝트에는 바로 올리지 않는다.
+
+이번 구현의 범위:
+
+```text
+Qdrant에 저장할 Document와 metadata 구조를 확정한다.
+Spring AI VectorStore를 단일 저장·검색 경로로 사용한다.
+Qdrant Native Client는 아직 사용하지 않는다.
+EmbeddingModel은 VectorStore가 사용할 Bean으로 분리해 둔다.
+실제 런타임 사용 시 Qdrant 서버와 EmbeddingModel 설정이 필요하다.
+```
+
+## 23. 현재 단계의 결론
+
+현재는 RDB/API 기반 구조화 RAG, RAG 문서 모델, Spring AI VectorStore 기반 Qdrant 저장·검색 진입점까지 완료되었다.
 
 다음 작업의 시작점은 다음이다.
 
 ```text
-현재 미커밋 챗봇 변경 확인
-→ RDB 기반 Grounded Chatbot 동작 검증
-→ 개인 질문/일반 질문 분리
-→ 질문 의도 기반 Context Routing 안정화
-→ 식약처 DB 우선 조회 + API fallback 테스트
-→ 1차 커밋
+Qdrant 서버 실행 환경 정리
+EmbeddingModel 설정 추가
+실제 Qdrant 연동 테스트
+인덱싱 작업 Claim Token 선점
+Retry / stale PROCESSING 복구
+새 documentVersion 전체 완료 후 ACTIVE 전환
+이전 documentVersion OBSOLETE 처리
 ```

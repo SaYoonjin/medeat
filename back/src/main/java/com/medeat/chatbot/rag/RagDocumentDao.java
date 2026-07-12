@@ -100,6 +100,44 @@ public class RagDocumentDao {
                 rag_index_job_id = rag_index_job_id
             """;
 
+    private static final String FIND_PENDING_VECTOR_CHUNKS_SQL = """
+            SELECT
+                c.rag_chunk_id,
+                c.rag_document_id,
+                c.chunk_index,
+                c.content,
+                d.item_seq,
+                d.drug_name,
+                d.section_type,
+                d.document_version,
+                d.source,
+                d.fetched_at
+            FROM rag_index_job j
+            INNER JOIN rag_chunk c
+                ON j.rag_chunk_id = c.rag_chunk_id
+            INNER JOIN rag_document d
+                ON c.rag_document_id = d.rag_document_id
+            WHERE j.job_status = 'PENDING'
+              AND d.lifecycle_status = 'INDEXING'
+              AND c.vector_id IS NULL
+            ORDER BY j.rag_index_job_id ASC
+            LIMIT :limit
+            """;
+
+    private static final String UPDATE_CHUNK_VECTOR_ID_SQL = """
+            UPDATE rag_chunk
+            SET vector_id = :vectorId
+            WHERE rag_chunk_id = :chunkId
+            """;
+
+    private static final String MARK_INDEX_JOB_COMPLETED_SQL = """
+            UPDATE rag_index_job
+            SET job_status = 'COMPLETED',
+                completed_at = :completedAt
+            WHERE rag_chunk_id = :chunkId
+              AND job_status = 'PENDING'
+            """;
+
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
     public RagDocumentDao(NamedParameterJdbcTemplate jdbcTemplate) {
@@ -179,6 +217,26 @@ public class RagDocumentDao {
         return jdbcTemplate.update(INSERT_INDEX_JOB_SQL, params);
     }
 
+    public List<RagVectorChunk> findPendingVectorChunks(int limit) {
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("limit", limit);
+        return jdbcTemplate.query(FIND_PENDING_VECTOR_CHUNKS_SQL, params, this::toVectorChunk);
+    }
+
+    public int updateChunkVectorId(Long chunkId, String vectorId) {
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("chunkId", chunkId)
+                .addValue("vectorId", vectorId);
+        return jdbcTemplate.update(UPDATE_CHUNK_VECTOR_ID_SQL, params);
+    }
+
+    public int markIndexJobCompleted(Long chunkId, LocalDateTime completedAt) {
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("chunkId", chunkId)
+                .addValue("completedAt", completedAt);
+        return jdbcTemplate.update(MARK_INDEX_JOB_COMPLETED_SQL, params);
+    }
+
     private MapSqlParameterSource itemSectionParams(Long itemSeq, DrugInfoSection sectionType) {
         return new MapSqlParameterSource()
                 .addValue("itemSeq", itemSeq)
@@ -197,6 +255,21 @@ public class RagDocumentDao {
                 rs.getString("source"),
                 toLocalDateTime(rs.getTimestamp("fetched_at")),
                 RagDocumentLifecycleStatus.valueOf(rs.getString("lifecycle_status"))
+        );
+    }
+
+    private RagVectorChunk toVectorChunk(ResultSet rs, int rowNum) throws SQLException {
+        return new RagVectorChunk(
+                rs.getLong("rag_chunk_id"),
+                rs.getLong("rag_document_id"),
+                rs.getInt("chunk_index"),
+                rs.getString("content"),
+                rs.getLong("item_seq"),
+                rs.getString("drug_name"),
+                DrugInfoSection.valueOf(rs.getString("section_type")),
+                rs.getInt("document_version"),
+                rs.getString("source"),
+                toLocalDateTime(rs.getTimestamp("fetched_at"))
         );
     }
 

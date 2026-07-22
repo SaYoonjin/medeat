@@ -60,6 +60,7 @@ class PrepareNotificationServiceTest {
         when(doseScheduleCalculator.calculate(medicationDto, slotStart, slotEnd)).thenReturn(List.of(dose));
         when(outboxFactory.create(medicationDto, dose, 100L)).thenReturn(command);
         when(notificationSendDao.insertPendingBatch(List.of(command))).thenReturn(new int[] {1});
+        when(notificationSendDao.countCreatedByOriginJobExecutionId(100L)).thenReturn(1);
 
         PrepareNotificationResult result = service.prepare(slotStart, slotEnd, 100L);
 
@@ -96,7 +97,7 @@ class PrepareNotificationServiceTest {
     }
 
     @Test
-    void countsDuplicateOutboxRowsFromNoOpInsertResults() {
+    void countsDuplicateOutboxRowsFromOriginJobExecutionId() {
         LocalDateTime slotStart = LocalDateTime.of(2026, 7, 11, 8, 0);
         LocalDateTime slotEnd = LocalDateTime.of(2026, 7, 11, 8, 5);
         Medication medication = new Medication();
@@ -114,7 +115,8 @@ class PrepareNotificationServiceTest {
         when(medicationMapper.toDto(medication)).thenReturn(medicationDto);
         when(doseScheduleCalculator.calculate(medicationDto, slotStart, slotEnd)).thenReturn(List.of(dose));
         when(outboxFactory.create(medicationDto, dose, 100L)).thenReturn(command);
-        when(notificationSendDao.insertPendingBatch(List.of(command))).thenReturn(new int[] {0});
+        when(notificationSendDao.insertPendingBatch(List.of(command))).thenReturn(new int[] {1});
+        when(notificationSendDao.countCreatedByOriginJobExecutionId(100L)).thenReturn(0);
 
         PrepareNotificationResult result = service.prepare(slotStart, slotEnd, 100L);
 

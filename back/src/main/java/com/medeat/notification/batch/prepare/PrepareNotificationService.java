@@ -65,12 +65,8 @@ public class PrepareNotificationService {
 
         int createdCount = 0;
         if (!commands.isEmpty()) {
-            int[] results = notificationSendDao.insertPendingBatch(commands);
-            for (int result : results) {
-                if (result > 0) {
-                    createdCount++;
-                }
-            }
+            notificationSendDao.insertPendingBatch(commands);
+            createdCount = notificationSendDao.countCreatedByOriginJobExecutionId(originJobExecutionId);
         }
 
         int insertAttemptCount = commands.size();

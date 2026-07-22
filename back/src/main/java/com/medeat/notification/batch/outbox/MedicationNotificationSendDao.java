@@ -43,6 +43,12 @@ public class MedicationNotificationSendDao {
                 notification_send_id = notification_send_id
             """;
 
+    private static final String COUNT_CREATED_BY_ORIGIN_JOB_EXECUTION_ID_SQL = """
+            SELECT COUNT(*)
+            FROM medication_notification_send
+            WHERE origin_job_execution_id = :originJobExecutionId
+            """;
+
     private static final String FIND_DISPATCH_CANDIDATES_SQL = """
             SELECT
                 notification_send_id,
@@ -177,6 +183,21 @@ public class MedicationNotificationSendDao {
                 .map(this::toParameters)
                 .toArray(SqlParameterSource[]::new);
         return jdbcTemplate.batchUpdate(INSERT_PENDING_SQL, batch);
+    }
+
+    public int countCreatedByOriginJobExecutionId(Long originJobExecutionId) {
+        if (originJobExecutionId == null) {
+            return 0;
+        }
+
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("originJobExecutionId", originJobExecutionId);
+        Integer count = jdbcTemplate.queryForObject(
+                COUNT_CREATED_BY_ORIGIN_JOB_EXECUTION_ID_SQL,
+                params,
+                Integer.class
+        );
+        return count == null ? 0 : count;
     }
 
     public List<MedicationNotificationSendCandidate> findDispatchCandidates(

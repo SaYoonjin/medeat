@@ -893,6 +893,12 @@ notification_count = 알림 발송 수
 33. stale PROCESSING 복구 DAO / Tasklet 구현
 34. MedicationNotificationRetryJob 구현
 35. 장애/재시도/Lease 만료 단위 테스트 추가
+36. batch-architecture.md 작성
+37. batch-performance.md 작성
+38. 대량 데이터 seed SQL 작성
+39. EXPLAIN 검증 SQL 작성
+40. Testcontainers MySQL 의존성 추가
+41. MedicationNotificationSendDaoMySqlIntegrationTest 작성
 ```
 
 구현된 `DoseScheduleCalculator`의 역할:
@@ -1261,6 +1267,74 @@ attempt_count < maxAttempts  -> RETRY, next_retry_at = now + recoveryBackoff
 6. 결과 저장 시 claim_token 불일치 -> staleResultCount 증가
 7. Lease 만료 PROCESSING -> RETRY 또는 FAILED 복구
 ```
+
+이번 단계에서 추가한 성능/아키텍처 문서:
+
+```text
+docs/batch-architecture.md
+docs/batch-performance.md
+docs/sql/notification-batch-performance-seed.sql
+docs/sql/notification-batch-explain.sql
+```
+
+현재 Codex 실행 환경에서는 MySQL CLI가 없고 `localhost:3306` 연결도 실패했다.
+따라서 실제 실행시간/EXPLAIN ANALYZE 수치는 측정하지 못했다. 대신 DB가 준비된 환경에서 같은 절차로
+재현할 수 있도록 대량 데이터 생성 SQL과 EXPLAIN 검증 SQL을 추가했다.
+
+성능 측정 문서에는 다음 내용을 기록했다.
+
+```text
+1. 측정 환경 기록 양식
+2. 대량 데이터 생성 절차
+3. PENDING/RETRY 후보 조회 EXPLAIN 절차
+4. PROCESSING 선점/결과 저장/stale 복구 EXPLAIN 절차
+5. prepareNotificationStep 측정 표
+6. sendNotificationStep 측정 표
+7. stale PROCESSING 복구 측정 표
+8. 현재 환경에서 실측하지 못한 이유와 후속 실행 방법
+```
+
+인덱스 검증 대상:
+
+| 쿼리 | 검증 인덱스 |
+|---|---|
+| PENDING/RETRY 후보 조회 | `idx_med_notification_due_status`, `idx_med_notification_schedule_status` |
+| 단건 PROCESSING 선점 | `PRIMARY` |
+| claim token 결과 저장 | `PRIMARY` |
+| stale PROCESSING 복구 | `idx_med_notification_claim_lease` |
+
+이번 단계에서 추가한 실제 MySQL 통합 테스트:
+
+```text
+MedicationNotificationSendDaoMySqlIntegrationTest
+```
+
+검증 항목:
+
+```text
+1. 동일 Outbox 2회 저장 -> 실제 MySQL 유니크 제약으로 1행 유지
+2. ON DUPLICATE KEY UPDATE no-op 반환값 확인
+3. 두 Thread 동시 claim -> 하나만 PROCESSING 선점
+4. 오래된 claim_token 결과 저장 -> update 0건
+5. stale PROCESSING -> RETRY 또는 FAILED 복구 및 claim 컬럼 초기화
+6. EXPLAIN에서 후보 조회 인덱스 선택 여부 확인
+```
+
+실행 명령:
+
+```powershell
+.\mvnw.cmd "-Dtest=MedicationNotificationSendDaoMySqlIntegrationTest" test
+```
+
+현재 환경 실행 결과:
+
+```text
+Docker CLI는 설치되어 있으나 Docker daemon이 실행 중이 아니어서 Testcontainers 테스트는 skip됨
+Tests run: 5, Failures: 0, Errors: 0, Skipped: 5
+전체 compile 통과
+```
+
+사용자가 Docker Desktop을 실행한 뒤 같은 명령을 재실행하면 실제 MySQL 컨테이너에서 통합 테스트가 수행된다.
 
 실행 시 참고 사항:
 

@@ -4,10 +4,12 @@ import com.medeat.auth.domain.user.entity.User;
 import com.medeat.auth.domain.user.repository.UserRepository;
 import com.medeat.medical.domain.medication.entity.Medication;
 import com.medeat.medical.domain.medication.entity.MedicationLog;
+import com.medeat.medical.domain.medication.entity.MedicationSchedule;
 import com.medeat.medical.domain.medication.mapper.MedicationMapper;
 import com.medeat.medical.domain.medication.query.MedicationQueryRepository;
 import com.medeat.medical.domain.medication.repository.MedicationLogRepository;
 import com.medeat.medical.domain.medication.repository.MedicationRepository;
+import com.medeat.medical.domain.medication.repository.MedicationScheduleRepository;
 import com.medeat.medical.dto.MedicationDto;
 import com.medeat.medical.dto.MedicationLogDto;
 import com.medeat.notification.feed.service.NotificationFeedService;
@@ -22,6 +24,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -37,6 +40,9 @@ class MedicationServiceImplTest {
 
     @Mock
     private MedicationLogRepository medicationLogRepository;
+
+    @Mock
+    private MedicationScheduleRepository medicationScheduleRepository;
 
     @Mock
     private UserRepository userRepository;
@@ -67,6 +73,7 @@ class MedicationServiceImplTest {
         medicationDto.setMedicationId(10L);
         medicationDto.setUserId(1L);
         medicationDto.setDrugName("drug");
+        medicationDto.setIntakeTime("08:00, 12:00, 08:00, invalid");
     }
 
     @Test
@@ -83,14 +90,22 @@ class MedicationServiceImplTest {
     void addMedication_savesMappedEntityWhenDuplicateDoesNotExist() {
         User user = new User();
         Medication entity = new Medication();
+        entity.setMedicationId(10L);
 
         when(medicationRepository.existsByUserUserIdAndDrugName(1L, "drug")).thenReturn(false);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(medicationMapper.toEntity(medicationDto, user)).thenReturn(entity);
+        when(medicationRepository.save(entity)).thenReturn(entity);
 
         medicationService.addMedication(medicationDto);
 
         verify(medicationRepository).save(entity);
+        verify(medicationScheduleRepository).deleteByMedicationMedicationId(10L);
+        ArgumentCaptor<Iterable<MedicationSchedule>> captor = ArgumentCaptor.forClass(Iterable.class);
+        verify(medicationScheduleRepository).saveAll(captor.capture());
+        assertThat(captor.getValue())
+                .extracting(MedicationSchedule::getIntakeTime)
+                .containsExactly(LocalTime.of(8, 0), LocalTime.of(12, 0));
     }
 
     @Test
@@ -138,12 +153,15 @@ class MedicationServiceImplTest {
     @Test
     void updateMedication_appliesChangesToLoadedEntity() {
         Medication entity = new Medication();
+        entity.setMedicationId(10L);
         when(medicationRepository.existsByUserUserIdAndDrugNameAndMedicationIdNot(1L, "drug", 10L)).thenReturn(false);
         when(medicationRepository.findById(10L)).thenReturn(Optional.of(entity));
 
         medicationService.updateMedication(medicationDto);
 
         verify(medicationMapper).apply(medicationDto, entity);
+        verify(medicationScheduleRepository).deleteByMedicationMedicationId(10L);
+        verify(medicationScheduleRepository).saveAll(any());
         verify(notificationFeedService).notify(eq(1L), any(), eq("DISEASE"), eq(1L));
     }
 }

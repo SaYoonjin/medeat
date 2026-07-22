@@ -4,10 +4,12 @@ import com.medeat.auth.domain.user.entity.User;
 import com.medeat.auth.domain.user.repository.UserRepository;
 import com.medeat.medical.domain.medication.entity.Medication;
 import com.medeat.medical.domain.medication.entity.MedicationLog;
+import com.medeat.medical.domain.medication.entity.MedicationSchedule;
 import com.medeat.medical.domain.medication.mapper.MedicationMapper;
 import com.medeat.medical.domain.medication.query.MedicationQueryRepository;
 import com.medeat.medical.domain.medication.repository.MedicationLogRepository;
 import com.medeat.medical.domain.medication.repository.MedicationRepository;
+import com.medeat.medical.domain.medication.repository.MedicationScheduleRepository;
 import com.medeat.medical.dto.MedicationDto;
 import com.medeat.medical.dto.MedicationLogDto;
 import com.medeat.medical.service.MedicationService;
@@ -23,16 +25,22 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @Transactional(readOnly = true)
 public class MedicationServiceImpl implements MedicationService {
 
     private static final Logger log = LoggerFactory.getLogger(MedicationServiceImpl.class);
+    private static final DateTimeFormatter INTAKE_TIME_FORMATTER = DateTimeFormatter.ofPattern("H:mm");
 
     private final MedicationRepository medicationRepository;
     private final MedicationLogRepository medicationLogRepository;
+    private final MedicationScheduleRepository medicationScheduleRepository;
     private final UserRepository userRepository;
     private final MedicationMapper medicationMapper;
     private final MedicationQueryRepository medicationQueryRepository;
@@ -43,6 +51,7 @@ public class MedicationServiceImpl implements MedicationService {
     public MedicationServiceImpl(
             MedicationRepository medicationRepository,
             MedicationLogRepository medicationLogRepository,
+            MedicationScheduleRepository medicationScheduleRepository,
             UserRepository userRepository,
             MedicationMapper medicationMapper,
             MedicationQueryRepository medicationQueryRepository,
@@ -52,6 +61,7 @@ public class MedicationServiceImpl implements MedicationService {
     ) {
         this.medicationRepository = medicationRepository;
         this.medicationLogRepository = medicationLogRepository;
+        this.medicationScheduleRepository = medicationScheduleRepository;
         this.userRepository = userRepository;
         this.medicationMapper = medicationMapper;
         this.medicationQueryRepository = medicationQueryRepository;
@@ -83,7 +93,8 @@ public class MedicationServiceImpl implements MedicationService {
         }
 
         User user = getRequiredUser(dto.getUserId());
-        medicationRepository.save(medicationMapper.toEntity(dto, user));
+        Medication saved = medicationRepository.save(medicationMapper.toEntity(dto, user));
+        syncMedicationSchedules(saved, dto.getIntakeTime());
     }
 
     @Override
@@ -98,6 +109,7 @@ public class MedicationServiceImpl implements MedicationService {
                 .orElseThrow(() -> new IllegalArgumentException("복약 정보를 찾을 수 없습니다."));
 
         medicationMapper.apply(dto, entity);
+        syncMedicationSchedules(entity, dto.getIntakeTime());
         notificationFeedService.notify(
                 dto.getUserId(),
                 NotificationFeedType.MEDICATION_SETTING_CHANGED,
@@ -189,5 +201,44 @@ public class MedicationServiceImpl implements MedicationService {
     private User getRequiredUser(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+    }
+
+    private void syncMedicationSchedules(Medication medication, String intakeTime) {
+        if (medication == null || medication.getMedicationId() == null) {
+            return;
+        }
+
+        medicationScheduleRepository.deleteByMedicationMedicationId(medication.getMedicationId());
+
+        List<LocalTime> intakeTimes = parseIntakeTimes(intakeTime);
+        if (intakeTimes.isEmpty()) {
+            return;
+        }
+
+        List<MedicationSchedule> schedules = new ArrayList<>();
+        for (LocalTime time : intakeTimes) {
+            schedules.add(new MedicationSchedule(medication, time));
+        }
+        medicationScheduleRepository.saveAll(schedules);
+    }
+
+    private List<LocalTime> parseIntakeTimes(String intakeTime) {
+        if (intakeTime == null || intakeTime.isBlank()) {
+            return List.of();
+        }
+
+        Set<LocalTime> uniqueTimes = new LinkedHashSet<>();
+        for (String token : intakeTime.split(",")) {
+            String value = token.trim();
+            if (value.isEmpty()) {
+                continue;
+            }
+            try {
+                uniqueTimes.add(LocalTime.parse(value, INTAKE_TIME_FORMATTER));
+            } catch (DateTimeParseException ignored) {
+                log.debug("Ignoring invalid medication intake time. value={}", value);
+            }
+        }
+        return List.copyOf(uniqueTimes);
     }
 }

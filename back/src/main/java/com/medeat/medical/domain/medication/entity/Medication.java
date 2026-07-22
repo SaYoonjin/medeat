@@ -44,6 +44,9 @@ public class Medication {
     @OneToMany(mappedBy = "medication", fetch = FetchType.LAZY)
     private List<MedicationLog> logs = new ArrayList<>();
 
+    @OneToMany(mappedBy = "medication", fetch = FetchType.LAZY)
+    private List<MedicationSchedule> schedules = new ArrayList<>();
+
     public Long getMedicationId() {
         return medicationId;
     }
@@ -130,5 +133,13 @@ public class Medication {
 
     public void setRecommended(String recommended) {
         this.recommended = recommended;
+    }
+
+    public List<MedicationSchedule> getSchedules() {
+        return schedules;
+    }
+
+    public void setSchedules(List<MedicationSchedule> schedules) {
+        this.schedules = schedules;
     }
 }

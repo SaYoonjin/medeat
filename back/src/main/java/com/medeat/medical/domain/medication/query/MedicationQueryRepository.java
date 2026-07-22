@@ -2,6 +2,7 @@ package com.medeat.medical.domain.medication.query;
 
 import com.medeat.medical.domain.medication.entity.QMedication;
 import com.medeat.medical.domain.medication.entity.QMedicationLog;
+import com.medeat.medical.domain.medication.entity.QMedicationSchedule;
 import com.medeat.medical.dto.MedicationDto;
 import com.medeat.medical.dto.MedicationLogDto;
 import com.querydsl.core.types.Projections;
@@ -10,10 +11,15 @@ import com.querydsl.jpa.impl.JPAQueryFactory;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 
 @Repository
 public class MedicationQueryRepository {
+
+    private static final DateTimeFormatter ALERT_TIME_FORMATTER = DateTimeFormatter.ofPattern("H:mm");
 
     private final JPAQueryFactory queryFactory;
 
@@ -72,10 +78,16 @@ public class MedicationQueryRepository {
     }
 
     public List<MedicationDto> findMedicationToAlert(String nowTime) {
+        LocalTime alertTime = parseAlertTime(nowTime);
+        if (alertTime == null) {
+            return List.of();
+        }
+
         QMedication medication = QMedication.medication;
+        QMedicationSchedule medicationSchedule = QMedicationSchedule.medicationSchedule;
 
         return queryFactory
-                .select(Projections.bean(
+                .selectDistinct(Projections.bean(
                         MedicationDto.class,
                         medication.medicationId.as("medicationId"),
                         medication.user().userId.as("userId"),
@@ -90,12 +102,20 @@ public class MedicationQueryRepository {
                         medication.recommended.as("recommended")
                 ))
                 .from(medication)
-                .where(Expressions.booleanTemplate(
-                        "find_in_set({0}, replace({1}, ' ', '')) > 0",
-                        nowTime,
-                        medication.intakeTime
-                ))
+                .join(medicationSchedule).on(medicationSchedule.medication().eq(medication))
+                .where(medicationSchedule.intakeTime.eq(alertTime))
                 .orderBy(medication.medicationId.asc())
                 .fetch();
+    }
+
+    private LocalTime parseAlertTime(String nowTime) {
+        if (nowTime == null || nowTime.isBlank()) {
+            return null;
+        }
+        try {
+            return LocalTime.parse(nowTime.trim(), ALERT_TIME_FORMATTER);
+        } catch (DateTimeParseException ignored) {
+            return null;
+        }
     }
 }

@@ -41,7 +41,7 @@ class DrugRagDocumentIndexingServiceTest {
         String normalized = "구역이나 구토가 나타날 수 있습니다.";
         String hash = service.sha256(normalized);
 
-        when(ragDocumentDao.findActiveDocument(200808876L, DrugInfoSection.SIDE_EFFECT))
+        when(ragDocumentDao.findLatestIndexableDocument(200808876L, DrugInfoSection.SIDE_EFFECT))
                 .thenReturn(Optional.of(new RagDocument(
                         1L,
                         200808876L,
@@ -78,7 +78,7 @@ class DrugRagDocumentIndexingServiceTest {
         DrugInfoDto drug = drug();
         drug.setSeQesitm("123456789012345678901234567890");
 
-        when(ragDocumentDao.findActiveDocument(200808876L, DrugInfoSection.SIDE_EFFECT))
+        when(ragDocumentDao.findLatestIndexableDocument(200808876L, DrugInfoSection.SIDE_EFFECT))
                 .thenReturn(Optional.empty());
         when(ragDocumentDao.findMaxDocumentVersion(200808876L, DrugInfoSection.SIDE_EFFECT))
                 .thenReturn(2);
@@ -126,7 +126,7 @@ class DrugRagDocumentIndexingServiceTest {
         DrugInfoDto drug = drug();
         drug.setAtpnQesitm("<div>  전문가와   상의하세요. </div>");
 
-        when(ragDocumentDao.findActiveDocument(200808876L, DrugInfoSection.PRECAUTION))
+        when(ragDocumentDao.findLatestIndexableDocument(200808876L, DrugInfoSection.PRECAUTION))
                 .thenReturn(Optional.empty());
         when(ragDocumentDao.findMaxDocumentVersion(200808876L, DrugInfoSection.PRECAUTION))
                 .thenReturn(0);

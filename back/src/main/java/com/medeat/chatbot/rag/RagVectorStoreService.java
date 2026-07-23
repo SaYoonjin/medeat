@@ -62,6 +62,7 @@ public class RagVectorStoreService {
             Document document = documents.get(index);
             ragDocumentDao.updateChunkVectorId(chunk.chunkId(), document.getId());
             ragDocumentDao.markIndexJobCompleted(chunk.chunkId(), completedAt);
+            ragDocumentDao.activateDocumentIfReady(chunk.documentId());
             savedCount++;
         }
         return savedCount;

@@ -71,11 +71,11 @@ public class DrugRagDocumentIndexingService {
         }
 
         String contentHash = sha256(content);
-        Optional<RagDocument> activeDocument = ragDocumentDao.findActiveDocument(
+        Optional<RagDocument> latestDocument = ragDocumentDao.findLatestIndexableDocument(
                 drugInfo.getItemSeq(),
                 section
         );
-        if (activeDocument.isPresent() && activeDocument.get().contentHash().equals(contentHash)) {
+        if (latestDocument.isPresent() && latestDocument.get().contentHash().equals(contentHash)) {
             return new RagDocumentIndexingResult(1, 1, 0, 0, 0);
         }
 

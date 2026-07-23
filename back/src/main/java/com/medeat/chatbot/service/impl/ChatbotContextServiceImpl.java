@@ -1,6 +1,8 @@
 package com.medeat.chatbot.service.impl;
 
 import com.medeat.chatbot.dto.ChatSource;
+import com.medeat.chatbot.rag.RagGroundingRetriever;
+import com.medeat.chatbot.rag.RagVectorSearchResult;
 import com.medeat.chatbot.service.ChatbotContextService;
 import com.medeat.chatbot.service.ChatbotGroundingContext;
 import com.medeat.chatbot.service.ChatbotRagQueryPlan;
@@ -39,15 +41,17 @@ public class ChatbotContextServiceImpl implements ChatbotContextService {
     private final MedicationService medicationService;
     private final DrugInfoService drugInfoService;
     private final ChatbotRagQueryPlanner queryPlanner;
+    private final RagGroundingRetriever ragGroundingRetriever;
     private final Clock clock;
 
     @Autowired
     public ChatbotContextServiceImpl(
             MedicationService medicationService,
             DrugInfoService drugInfoService,
-            ChatbotRagQueryPlanner queryPlanner
+            ChatbotRagQueryPlanner queryPlanner,
+            RagGroundingRetriever ragGroundingRetriever
     ) {
-        this(medicationService, drugInfoService, queryPlanner, Clock.systemUTC());
+        this(medicationService, drugInfoService, queryPlanner, ragGroundingRetriever, Clock.systemUTC());
     }
 
     ChatbotContextServiceImpl(
@@ -55,18 +59,20 @@ public class ChatbotContextServiceImpl implements ChatbotContextService {
             DrugInfoService drugInfoService,
             Clock clock
     ) {
-        this(medicationService, drugInfoService, new ChatbotRagQueryPlanner(), clock);
+        this(medicationService, drugInfoService, new ChatbotRagQueryPlanner(), null, clock);
     }
 
     ChatbotContextServiceImpl(
             MedicationService medicationService,
             DrugInfoService drugInfoService,
             ChatbotRagQueryPlanner queryPlanner,
+            RagGroundingRetriever ragGroundingRetriever,
             Clock clock
     ) {
         this.medicationService = medicationService;
         this.drugInfoService = drugInfoService;
         this.queryPlanner = queryPlanner;
+        this.ragGroundingRetriever = ragGroundingRetriever;
         this.clock = clock;
     }
 
@@ -98,6 +104,7 @@ public class ChatbotContextServiceImpl implements ChatbotContextService {
             appendGeneralDrugEvidence(
                     context,
                     queryPlan,
+                    question,
                     sources,
                     retrievedAt
             );
@@ -120,6 +127,7 @@ public class ChatbotContextServiceImpl implements ChatbotContextService {
                         context,
                         medication,
                         queryPlan.sections(),
+                        question,
                         sources,
                         retrievedAt
                 );
@@ -138,6 +146,7 @@ public class ChatbotContextServiceImpl implements ChatbotContextService {
     private void appendGeneralDrugEvidence(
             StringBuilder context,
             ChatbotRagQueryPlan queryPlan,
+            String question,
             List<ChatSource> sources,
             Instant retrievedAt
     ) {
@@ -194,6 +203,7 @@ public class ChatbotContextServiceImpl implements ChatbotContextService {
                     candidate.getItemSeq(),
                     candidate.getItemName(),
                     queryPlan.sections(),
+                    question,
                     sources,
                     retrievedAt
             );
@@ -256,6 +266,7 @@ public class ChatbotContextServiceImpl implements ChatbotContextService {
             StringBuilder context,
             MedicationDto medication,
             Set<DrugInfoSection> sections,
+            String question,
             List<ChatSource> sources,
             Instant retrievedAt
     ) {
@@ -270,6 +281,7 @@ public class ChatbotContextServiceImpl implements ChatbotContextService {
                     medication.getItemSeq(),
                     medication.getDrugName(),
                     sections,
+                    question,
                     sources,
                     retrievedAt
             );
@@ -284,6 +296,7 @@ public class ChatbotContextServiceImpl implements ChatbotContextService {
             Long itemSeq,
             String nameHint,
             Set<DrugInfoSection> sections,
+            String question,
             List<ChatSource> sources,
             Instant retrievedAt
     ) throws Exception {
@@ -298,8 +311,20 @@ public class ChatbotContextServiceImpl implements ChatbotContextService {
         }
 
         context.append("  - 식약처 제품명: ").append(clean(drug.getItemName())).append('\n');
+        Map<DrugInfoSection, List<RagVectorSearchResult>> vectorEvidence =
+                ragGroundingRetriever == null
+                        ? Map.of()
+                        : ragGroundingRetriever.retrieve(question, drug, sections);
         for (DrugInfoSection section : sections) {
-            appendField(context, section.getLabel(), section.getValue(drug));
+            List<RagVectorSearchResult> chunks = vectorEvidence.getOrDefault(section, List.of());
+            if (chunks.isEmpty()) {
+                appendField(context, section.getLabel(), section.getValue(drug));
+                continue;
+            }
+            context.append("  - ").append(section.getLabel()).append(" 관련 근거:\n");
+            for (RagVectorSearchResult chunk : chunks) {
+                context.append("    - ").append(clean(chunk.content())).append('\n');
+            }
         }
 
         sources.add(new ChatSource(

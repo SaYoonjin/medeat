@@ -7,6 +7,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -43,6 +44,26 @@ public class RagDocumentDao {
             FROM rag_document
             WHERE item_seq = :itemSeq
               AND section_type = :sectionType
+            """;
+
+    private static final String FIND_LATEST_SQL = """
+            SELECT
+                rag_document_id,
+                item_seq,
+                drug_name,
+                section_type,
+                content,
+                content_hash,
+                document_version,
+                source,
+                fetched_at,
+                lifecycle_status
+            FROM rag_document
+            WHERE item_seq = :itemSeq
+              AND section_type = :sectionType
+              AND lifecycle_status IN ('INDEXING', 'ACTIVE')
+            ORDER BY document_version DESC
+            LIMIT 1
             """;
 
     private static final String INSERT_DOCUMENT_SQL = """
@@ -138,6 +159,33 @@ public class RagDocumentDao {
               AND job_status = 'PENDING'
             """;
 
+    private static final String COUNT_INCOMPLETE_JOBS_SQL = """
+            SELECT COUNT(*)
+            FROM rag_index_job j
+            INNER JOIN rag_chunk c
+                ON j.rag_chunk_id = c.rag_chunk_id
+            WHERE c.rag_document_id = :documentId
+              AND j.job_status <> 'COMPLETED'
+            """;
+
+    private static final String MARK_PREVIOUS_ACTIVE_OBSOLETE_SQL = """
+            UPDATE rag_document previous
+            INNER JOIN rag_document current
+                ON current.rag_document_id = :documentId
+               AND previous.item_seq = current.item_seq
+               AND previous.section_type = current.section_type
+            SET previous.lifecycle_status = 'OBSOLETE'
+            WHERE previous.lifecycle_status = 'ACTIVE'
+              AND previous.rag_document_id <> current.rag_document_id
+            """;
+
+    private static final String MARK_DOCUMENT_ACTIVE_SQL = """
+            UPDATE rag_document
+            SET lifecycle_status = 'ACTIVE'
+            WHERE rag_document_id = :documentId
+              AND lifecycle_status = 'INDEXING'
+            """;
+
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
     public RagDocumentDao(NamedParameterJdbcTemplate jdbcTemplate) {
@@ -147,6 +195,12 @@ public class RagDocumentDao {
     public Optional<RagDocument> findActiveDocument(Long itemSeq, DrugInfoSection sectionType) {
         MapSqlParameterSource params = itemSectionParams(itemSeq, sectionType);
         List<RagDocument> documents = jdbcTemplate.query(FIND_ACTIVE_SQL, params, this::toDocument);
+        return documents.stream().findFirst();
+    }
+
+    public Optional<RagDocument> findLatestIndexableDocument(Long itemSeq, DrugInfoSection sectionType) {
+        MapSqlParameterSource params = itemSectionParams(itemSeq, sectionType);
+        List<RagDocument> documents = jdbcTemplate.query(FIND_LATEST_SQL, params, this::toDocument);
         return documents.stream().findFirst();
     }
 
@@ -235,6 +289,23 @@ public class RagDocumentDao {
                 .addValue("chunkId", chunkId)
                 .addValue("completedAt", completedAt);
         return jdbcTemplate.update(MARK_INDEX_JOB_COMPLETED_SQL, params);
+    }
+
+    @Transactional
+    public boolean activateDocumentIfReady(Long documentId) {
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("documentId", documentId);
+        Integer incompleteCount = jdbcTemplate.queryForObject(
+                COUNT_INCOMPLETE_JOBS_SQL,
+                params,
+                Integer.class
+        );
+        if (incompleteCount == null || incompleteCount > 0) {
+            return false;
+        }
+
+        jdbcTemplate.update(MARK_PREVIOUS_ACTIVE_OBSOLETE_SQL, params);
+        return jdbcTemplate.update(MARK_DOCUMENT_ACTIVE_SQL, params) == 1;
     }
 
     private MapSqlParameterSource itemSectionParams(Long itemSeq, DrugInfoSection sectionType) {

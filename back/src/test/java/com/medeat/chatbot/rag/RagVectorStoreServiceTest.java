@@ -60,6 +60,7 @@ class RagVectorStoreServiceTest {
                 100L,
                 LocalDateTime.ofInstant(clock.instant(), clock.getZone())
         );
+        verify(ragDocumentDao).activateDocumentIfReady(10L);
     }
 
     @Test

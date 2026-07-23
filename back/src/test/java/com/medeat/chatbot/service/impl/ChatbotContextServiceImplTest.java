@@ -1,6 +1,9 @@
 package com.medeat.chatbot.service.impl;
 
 import com.medeat.chatbot.service.ChatbotGroundingContext;
+import com.medeat.chatbot.rag.RagGroundingRetriever;
+import com.medeat.chatbot.rag.RagVectorSearchResult;
+import com.medeat.chatbot.service.ChatbotRagQueryPlanner;
 import com.medeat.medical.dto.DrugInfoSection;
 import com.medeat.medical.dto.DrugInfoDto;
 import com.medeat.medical.dto.MedicationDto;
@@ -13,6 +16,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -135,6 +139,54 @@ class ChatbotContextServiceImplTest {
                 .contains("제품명, 제조사, 제형을 확인해 다시 질문");
         assertThat(result.sources()).isEmpty();
         verify(drugInfoService, never()).getDrugInfoCached(anyLong(), anyString(), anySet());
+    }
+
+    @Test
+    void buildUsesVectorChunksInsteadOfWholeSectionWhenAvailable() throws Exception {
+        RagGroundingRetriever retriever = mock(RagGroundingRetriever.class);
+        ChatbotContextServiceImpl vectorContextService = new ChatbotContextServiceImpl(
+                medicationService,
+                drugInfoService,
+                new ChatbotRagQueryPlanner(),
+                retriever,
+                Clock.fixed(now, ZoneOffset.UTC)
+        );
+        MedicationDto medication = medication(10L, 200808876L, "테스트정", "저녁", 2);
+        DrugInfoDto drug = drug(200808876L, "테스트정");
+        drug.setSeQesitm("구역, 구토, 발진, 두통 등 매우 긴 전체 부작용 문서");
+        drug.setAtpnQesitm("이상 증상이 있으면 전문가와 상의합니다.");
+        RagVectorSearchResult chunk = new RagVectorSearchResult(
+                "vector-1",
+                "구역이나 구토가 나타날 수 있습니다.",
+                200808876L,
+                "테스트정",
+                DrugInfoSection.SIDE_EFFECT,
+                1,
+                10L,
+                100L
+        );
+
+        when(medicationService.getMedicationList(1L)).thenReturn(List.of(medication));
+        when(medicationService.getTodayLogs(1L)).thenReturn(List.of());
+        when(drugInfoService.getDrugInfoCached(
+                200808876L,
+                "테스트정",
+                java.util.Set.of(DrugInfoSection.SIDE_EFFECT, DrugInfoSection.PRECAUTION)
+        )).thenReturn(drug);
+        when(retriever.retrieve(
+                "테스트정 먹고 메스꺼워",
+                drug,
+                java.util.Set.of(DrugInfoSection.SIDE_EFFECT, DrugInfoSection.PRECAUTION)
+        )).thenReturn(Map.of(DrugInfoSection.SIDE_EFFECT, List.of(chunk)));
+
+        ChatbotGroundingContext result =
+                vectorContextService.build(1L, "테스트정 먹고 메스꺼워");
+
+        assertThat(result.content())
+                .contains("부작용 관련 근거")
+                .contains("구역이나 구토가 나타날 수 있습니다.")
+                .contains("주의사항: 이상 증상이 있으면 전문가와 상의합니다.")
+                .doesNotContain("매우 긴 전체 부작용 문서");
     }
 
     private MedicationDto medication(

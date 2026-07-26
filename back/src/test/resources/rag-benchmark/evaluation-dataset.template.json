@@ -1,0 +1,40 @@
+{
+  "name": "MEDEAT 의약품 RAG 검색 평가셋",
+  "description": "실제 평가 전 itemSeq, 질문, 정답 Chunk ID 또는 정답 문구를 검수해 입력합니다.",
+  "cases": [
+    {
+      "id": "side-effect-001",
+      "query": "이 약을 먹고 속이 울렁거리는데 관련 부작용이 있나요?",
+      "itemSeq": 200808876,
+      "sectionType": "SIDE_EFFECT",
+      "relevantChunkIds": [],
+      "relevantTextContains": [
+        "구역",
+        "구토"
+      ],
+      "notes": "동의어로 표현된 증상이 올바른 부작용 근거를 찾는지 평가"
+    },
+    {
+      "id": "interaction-001",
+      "query": "이 약을 다른 약과 같이 먹어도 되나요?",
+      "itemSeq": 200808876,
+      "sectionType": "INTERACTION",
+      "relevantChunkIds": [],
+      "relevantTextContains": [
+        "함께 복용"
+      ],
+      "notes": "실제 문서 표현에 맞게 정답 문구를 교체해야 하는 템플릿 항목"
+    },
+    {
+      "id": "storage-001",
+      "query": "이 약은 어떻게 보관해야 하나요?",
+      "itemSeq": 200808876,
+      "sectionType": "STORAGE",
+      "relevantChunkIds": [],
+      "relevantTextContains": [
+        "보관"
+      ],
+      "notes": "제품별 실제 보관 문구로 교체 권장"
+    }
+  ]
+}

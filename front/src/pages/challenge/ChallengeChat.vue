@@ -58,7 +58,7 @@ const loadMessages = async () => {
 // ===== WebSocket 연결 =====
 const connect = () => {
   stompClient.value = new Client({
-    brokerURL: "ws://localhost:8080/ws-chat",
+    brokerURL: `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws-chat`,
     reconnectDelay: 5000,
     connectHeaders: {
       userId: String(myUserId.value),

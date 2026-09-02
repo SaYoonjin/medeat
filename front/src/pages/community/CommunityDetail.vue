@@ -113,7 +113,7 @@ const saveComment = async () => {
   await loadDetail();
 };
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
 const fullImageUrl = computed(() => {
   if (!post.value?.imagePath) return null;
   return `${apiBaseUrl}/uploads/${post.value.imagePath}`;

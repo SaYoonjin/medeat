@@ -76,7 +76,7 @@ onMounted(async () => {
       const res = await dietApi.getDetail(dietId)
       Object.assign(log, res.data)
       if (log.photoPath) {
-        photoPreview.value = `${import.meta.env.VITE_API_BASE_URL}${log.photoPath}`
+        photoPreview.value = `${import.meta.env.VITE_API_BASE_URL || ''}${log.photoPath}`
       }
     } catch (e) {
       console.error('기록 로드 실패', e)

@@ -1,7 +1,9 @@
 package com.medeat.config;
 
 import java.util.List;
+import java.util.Arrays;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -39,14 +41,15 @@ public class SecurityConfig {
     }
 
     @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
+    public CorsConfigurationSource corsConfigurationSource(
+            @Value("${medeat.cors.allowed-origin-patterns}") String allowedOriginPatterns
+    ) {
         CorsConfiguration config = new CorsConfiguration();
 
-        // ✅ 실제 프론트 주소 전부 허용
-        config.setAllowedOrigins(List.of(
-            "http://localhost:5173",
-            "http://localhost:5174"
-        ));
+        config.setAllowedOriginPatterns(Arrays.stream(allowedOriginPatterns.split(","))
+                .map(String::trim)
+                .filter(origin -> !origin.isBlank())
+                .toList());
 
         config.setAllowedMethods(List.of(
             "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"

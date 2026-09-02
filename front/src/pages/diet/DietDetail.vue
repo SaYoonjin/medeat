@@ -34,7 +34,7 @@ const formatNum = (num) => {
 // 사진 URL
 const imageUrl = computed(() => {
   if (!log.value || !log.value.photoPath) return null;
-  const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
   return `${baseUrl}${log.value.photoPath}`;
 });
 

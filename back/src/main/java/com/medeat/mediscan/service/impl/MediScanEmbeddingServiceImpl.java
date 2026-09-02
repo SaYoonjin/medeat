@@ -3,6 +3,7 @@ package com.medeat.mediscan.service.impl;
 import com.medeat.mediscan.service.MediScanEmbeddingService;
 
 import org.springframework.http.HttpEntity;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -22,6 +23,14 @@ public class MediScanEmbeddingServiceImpl implements MediScanEmbeddingService {
     // ⚠️ final_embedding.json dim과 반드시 맞춰야 함
     private static final int DIM = 768; // ← 네 파일에서 확인해서 수정 가능
 
+    private final String embeddingServerUrl;
+
+    public MediScanEmbeddingServiceImpl(
+            @Value("${pill.embed.server-url}") String embeddingServerUrl
+    ) {
+        this.embeddingServerUrl = embeddingServerUrl;
+    }
+
     @Override
     public float[] createEmbedding(MultipartFile image) {
 
@@ -38,7 +47,7 @@ public class MediScanEmbeddingServiceImpl implements MediScanEmbeddingService {
 
         ResponseEntity<Map> response =
                 restTemplate.postForEntity(
-                        "http://localhost:8001/embed",
+                        embeddingServerUrl,
                         request,
                         Map.class
                 );

@@ -59,7 +59,7 @@ const loadPost = async () => {
     // 기존 이미지가 있는 경우 (단일 이미지 기준에서 배열 확장 대응 가능하게 구조화)
     if (p.imagePath) {
       previewImages.value.push({
-        url: `${import.meta.env.VITE_API_BASE_URL}/uploads/${p.imagePath}`,
+        url: `${import.meta.env.VITE_API_BASE_URL || ''}/uploads/${p.imagePath}`,
         isExisting: true
       });
     }

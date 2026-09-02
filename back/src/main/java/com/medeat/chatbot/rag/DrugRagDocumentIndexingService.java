@@ -3,6 +3,7 @@ package com.medeat.chatbot.rag;
 import com.medeat.medical.dto.DrugInfoDto;
 import com.medeat.medical.dto.DrugInfoSection;
 import org.jsoup.Jsoup;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -26,6 +27,7 @@ public class DrugRagDocumentIndexingService {
     private final int chunkOverlap;
     private final Clock clock;
 
+    @Autowired
     public DrugRagDocumentIndexingService(
             RagDocumentDao ragDocumentDao,
             @Value("${medeat.rag.chunk.size:500}") int chunkSize,
